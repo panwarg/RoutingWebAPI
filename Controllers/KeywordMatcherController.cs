@@ -1,48 +1,41 @@
-﻿using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.Configuration;
+﻿using RoutingWebAPI.App_Start;
 using System.Net.Http;
+using System.Text.RegularExpressions;
+using System.Web;
 using System.Web.Http;
-using System.Web.Mvc;
 
 namespace RoutingWebAPI.Controllers
 {
     public class KeywordMatcherController : ApiController
     {
-        // GET: api/KeywordMatcher/key1
-        public bool Get(string id)
+        [HttpPost]
+        public bool Post()
         {
-            var sourceKeyList = ConfigurationManager.AppSettings["SourceKeyList"];
-            if (string.IsNullOrEmpty(sourceKeyList)) 
-            {
-                return false;
-            }
+            System.IO.StreamReader reader = new System.IO.StreamReader(HttpContext.Current.Request.InputStream);
+            reader.BaseStream.Position = 0;
+            var document = reader.ReadToEnd();
 
-            var keys = sourceKeyList.Split(',');
             var isMatched = false;
 
-            foreach (var key in keys)
+            foreach (var key in ApplicationConfig.SourceKeyList)
             {
-                if (key.Contains(id))
+                var regex = new Regex(key);
+                if (regex.IsMatch(document))
                 {
                     isMatched = true;
                     break;
-                }                    
+                }             
             }
 
             if (!isMatched) 
             {
-                var redirectApiURL = ConfigurationManager.AppSettings["RedirectApiURL"];
-                
-                if(!string.IsNullOrEmpty(redirectApiURL)) 
+                var httpClient = new HttpClient();
+                var response = httpClient.PostAsync(ApplicationConfig.RedirectApiURL, new StringContent(document)).Result;
+                if (response != null && response.StatusCode == System.Net.HttpStatusCode.OK) 
                 {
-                    var httpClient = new HttpClient();
-                    var response = httpClient.GetAsync(redirectApiURL + $"/{id}").Result;
-                    if (response != null && response.StatusCode == System.Net.HttpStatusCode.OK) 
-                    {
-                        return true;
-                    }
+                    return true;
                 }
+                
             }
 
             return isMatched;
